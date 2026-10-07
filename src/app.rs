@@ -153,7 +153,7 @@ fn initialize(default: String) -> Result<()> {
     let config = Config::new(default.clone(), providers);
     initialize_profile(&default)?;
     config::save(&config)?;
-    let shim_directory = shims::install()?;
+    let shim_directory = shims::install(&config)?;
     ui::success("Initialized routeai");
     ui::field("Config", path.display());
     ui::field("Default", &default);
@@ -362,7 +362,8 @@ fn status(profile: Option<String>) -> Result<()> {
 fn shim(command: ShimCommand) -> Result<()> {
     match command {
         ShimCommand::Install => {
-            let directory = shims::install()?;
+            let config = config::load()?;
+            let directory = shims::install(&config)?;
             show_installed_shims(&directory);
         }
         ShimCommand::Uninstall => {
@@ -443,15 +444,7 @@ fn doctor() -> Result<()> {
         ui::problem("Shims          claude and codex are not installed");
     }
     checks += 1;
-    let path_precedes_commands = path_position(&shim_dir).is_some_and(|shim_position| {
-        [Provider::Claude, Provider::Codex]
-            .iter()
-            .filter_map(|provider| provider.command(&config))
-            .filter_map(|command| command.parent())
-            .all(|directory| {
-                path_position(directory).is_none_or(|position| shim_position < position)
-            })
-    });
+    let path_precedes_commands = shims::precedes_provider_commands(&shim_dir, &config);
     if path_precedes_commands {
         ui::check("PATH           shims precede provider commands");
     } else {
@@ -502,11 +495,6 @@ fn env_profile() -> Option<String> {
     env::var("ROUTEAI_PROFILE")
         .ok()
         .filter(|value| !value.is_empty())
-}
-
-fn path_position(directory: &Path) -> Option<usize> {
-    let paths = env::var_os("PATH")?;
-    env::split_paths(&paths).position(|entry| entry == directory)
 }
 
 fn atty_stderr() -> bool {
