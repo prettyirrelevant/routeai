@@ -1,0 +1,159 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to rebuild
+        required: false
+        type: string
+
+permissions: {}
+
+jobs:
+  release:
+    name: Prepare release
+    if: github.repository_owner == 'prettyirrelevant'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      created: ${{ steps.release-data.outputs.created }}
+      tag: ${{ steps.release-data.outputs.tag }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install Rust
+        run: rustup show
+      - name: Create release
+        id: release-plz
+        if: inputs.tag == ''
+        uses: release-plz/action@b8d6b54b02889ff2ae2bb82e8b57c3a8fc1683a5
+        with:
+          command: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Read release data
+        id: release-data
+        env:
+          RELEASES: ${{ steps.release-plz.outputs.releases }}
+          REQUESTED_TAG: ${{ inputs.tag }}
+          RELEASES_CREATED: ${{ steps.release-plz.outputs.releases_created }}
+        run: |
+          if [[ -n "$REQUESTED_TAG" ]]; then
+            echo "created=true" >> "$GITHUB_OUTPUT"
+            echo "tag=$REQUESTED_TAG" >> "$GITHUB_OUTPUT"
+          else
+            echo "created=$RELEASES_CREATED" >> "$GITHUB_OUTPUT"
+            if [[ "$RELEASES_CREATED" == "true" ]]; then
+              echo "tag=$(jq -r '.[0].tag' <<< "$RELEASES")" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+  release-pr:
+    name: Update release pull request
+    if: github.repository_owner == 'prettyirrelevant' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    concurrency:
+      group: release-plz-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install Rust
+        run: rustup show
+      - name: Update release pull request
+        uses: release-plz/action@b8d6b54b02889ff2ae2bb82e8b57c3a8fc1683a5
+        with:
+          command: release-pr
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: release
+    if: needs.release.outputs.created == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - runner: macos-15
+            target: aarch64-apple-darwin
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+      - name: Install Rust target
+        run: rustup target add ${{ matrix.target }}
+      - name: Build binary
+        run: cargo build --locked --release --target ${{ matrix.target }}
+      - name: Package Unix binary
+        if: runner.os != 'Windows'
+        env:
+          TAG: ${{ needs.release.outputs.tag }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          archive="routeai-${TAG}-${TARGET}.tar.gz"
+          tar -C "target/${TARGET}/release" -czf "$archive" routeai
+          shasum -a 256 "$archive" > "${archive}.sha256"
+      - name: Package Windows binary
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          TAG: ${{ needs.release.outputs.tag }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          $archive = "routeai-$env:TAG-$env:TARGET.zip"
+          Compress-Archive "target/$env:TARGET/release/routeai.exe" $archive
+          $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLower()
+          "$hash  $archive" | Set-Content "$archive.sha256"
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: routeai-${{ matrix.target }}
+          path: routeai-*
+          if-no-files-found: error
+
+  publish:
+    name: Publish binaries
+    needs: [release, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download builds
+        uses: actions/download-artifact@v5
+        with:
+          pattern: routeai-*
+          path: artifacts
+          merge-multiple: true
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release.outputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: gh release upload "$TAG" artifacts/* --repo "$REPOSITORY" --clobber
