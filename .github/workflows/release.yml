@@ -13,6 +13,10 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: release-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   release:
     name: Prepare release
@@ -34,7 +38,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.event.workflow_run.head_branch || github.ref_name }}
       - name: Install Rust
         run: rustup show
       - name: Create release
@@ -73,16 +77,13 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    concurrency:
-      group: release-plz-${{ github.event.workflow_run.head_branch }}
-      cancel-in-progress: false
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: false
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.workflow_run.head_branch }}
       - name: Install Rust
         run: rustup show
       - name: Update release pull request
