@@ -11,6 +11,14 @@ profile.
 
 ## Install
 
+Install the latest release with [mise](https://mise.jdx.dev/):
+
+```sh
+mise use -g github:prettyirrelevant/routeai
+```
+
+You can also build the latest source with Cargo:
+
 ```sh
 cargo install --git https://github.com/prettyirrelevant/routeai
 ```
