@@ -38,6 +38,15 @@ impl TestHome {
             .env("PATH", self.root().join("bin"));
         command
     }
+
+    fn provider(&self, name: &str) -> assert_cmd::Command {
+        let mut command = assert_cmd::Command::new(self.root().join("state/bin").join(name));
+        command
+            .env("ROUTEAI_CONFIG", self.root().join("config.toml"))
+            .env("ROUTEAI_HOME", self.root().join("state"))
+            .env("PATH", self.root().join("bin"));
+        command
+    }
 }
 
 fn executable(path: &Path, content: &str) {
@@ -73,9 +82,9 @@ fn routes_provider_state_by_directory() {
         .success()
         .stdout(predicate::str::starts_with("work\n"));
 
-    home.command()
+    home.provider("claude")
         .current_dir(&work)
-        .args(["run", "claude", "--", "--continue"])
+        .arg("--continue")
         .assert()
         .success()
         .stdout(
@@ -83,9 +92,8 @@ fn routes_provider_state_by_directory() {
                 .and(predicate::str::contains("--continue")),
         );
 
-    home.command()
+    home.provider("codex")
         .current_dir(home.root())
-        .args(["run", "codex"])
         .assert()
         .success()
         .stdout(predicate::str::contains("state/profiles/personal/codex"));
@@ -96,17 +104,13 @@ fn preserves_provider_exit_code() {
     let home = TestHome::new();
     home.command().args(["init"]).assert().success();
 
-    home.command()
-        .args(["run", "codex", "--", "fail"])
-        .assert()
-        .code(42);
+    home.provider("codex").arg("fail").assert().code(42);
 }
 
 #[test]
 fn installs_both_transparent_shims() {
     let home = TestHome::new();
     home.command().args(["init"]).assert().success();
-    home.command().args(["shim", "install"]).assert().success();
 
     let bin = home.root().join("state/bin");
     assert!(bin.join("claude").exists());
@@ -122,10 +126,9 @@ fn profile_override_beats_directory_route() {
         .assert()
         .success();
 
-    home.command()
+    home.provider("codex")
         .env("ROUTEAI_PROFILE", "work")
-        .args(["which"])
         .assert()
         .success()
-        .stdout(predicate::str::starts_with("work\n"));
+        .stdout(predicate::str::contains("state/profiles/work/codex"));
 }

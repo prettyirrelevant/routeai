@@ -29,11 +29,10 @@ cargo install --git https://github.com/prettyirrelevant/routeai
 routeai init --default personal
 routeai profile add work
 routeai route add work ~/Developer/Work/Acme
-routeai shim install
 ```
 
-When needed, add the line printed by `routeai shim install` after other `PATH` changes.
-Restart your shell, then verify the setup:
+`routeai init` installs the transparent commands. When needed, add its printed `PATH`
+line after other `PATH` changes. Restart your shell, then verify the setup:
 
 ```sh
 routeai doctor
@@ -77,7 +76,6 @@ routeai doctor
 Use one profile without changing routes:
 
 ```sh
-routeai run claude --profile work -- --continue
 ROUTEAI_PROFILE=work codex
 ```
 

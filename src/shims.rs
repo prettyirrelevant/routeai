@@ -119,7 +119,7 @@ fn create_shim(
     provider: &str,
 ) -> std::io::Result<()> {
     let content = format!(
-        "{WINDOWS_MARKER}@echo off\r\n\"{}\" run {provider} -- %*\r\n",
+        "{WINDOWS_MARKER}@echo off\r\n\"{}\" __run {provider} %*\r\n",
         target.display()
     );
     fs::write(link, content)

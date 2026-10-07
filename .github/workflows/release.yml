@@ -1,8 +1,9 @@
 name: Release
 
 on:
-  push:
-    branches: [main]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
   workflow_dispatch:
     inputs:
       tag:
@@ -15,7 +16,11 @@ permissions: {}
 jobs:
   release:
     name: Prepare release
-    if: github.repository_owner == 'prettyirrelevant'
+    if: >-
+      github.repository_owner == 'prettyirrelevant' &&
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -29,6 +34,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - name: Install Rust
         run: rustup show
       - name: Create release
@@ -58,13 +64,17 @@ jobs:
 
   release-pr:
     name: Update release pull request
-    if: github.repository_owner == 'prettyirrelevant' && github.event_name == 'push'
+    if: >-
+      github.repository_owner == 'prettyirrelevant' &&
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
     concurrency:
-      group: release-plz-${{ github.ref }}
+      group: release-plz-${{ github.event.workflow_run.head_branch }}
       cancel-in-progress: false
     steps:
       - name: Check out repository
@@ -72,6 +82,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+          ref: ${{ github.event.workflow_run.head_sha }}
       - name: Install Rust
         run: rustup show
       - name: Update release pull request

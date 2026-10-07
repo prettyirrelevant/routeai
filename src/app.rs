@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, bail};
-use clap::{Args, Parser, Subcommand};
+use clap::{Parser, Subcommand};
 
 use crate::{
     config::{
@@ -49,8 +49,6 @@ enum Commands {
         #[arg(long)]
         verbose: bool,
     },
-    /// Run a provider with the selected profile.
-    Run(RunArgs),
     /// Sign a profile in to a provider.
     Login {
         provider: Provider,
@@ -103,15 +101,6 @@ enum ShimCommand {
     Uninstall,
 }
 
-#[derive(Args)]
-struct RunArgs {
-    provider: Provider,
-    #[arg(long)]
-    profile: Option<String>,
-    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
-    args: Vec<OsString>,
-}
-
 pub(crate) fn run() -> Result<u8> {
     if let Some(provider) = env::args_os()
         .next()
@@ -121,13 +110,22 @@ pub(crate) fn run() -> Result<u8> {
         return launch(provider, None, env::args_os().skip(1));
     }
 
+    let mut args = env::args_os().skip(1);
+    if args.next().is_some_and(|arg| arg == "__run") {
+        let provider = args
+            .next()
+            .as_deref()
+            .and_then(provider::provider_from_invocation)
+            .context("internal provider is missing")?;
+        return launch(provider, None, args);
+    }
+
     match Cli::parse().command {
         Commands::Init { default } => initialize(default)?,
         Commands::Profile { command } => profile(command)?,
         Commands::Route { command } => route(command)?,
         Commands::Default { profile } => set_default(profile)?,
         Commands::Which { path, verbose } => show_selection(path, verbose)?,
-        Commands::Run(args) => return launch(args.provider, args.profile, args.args),
         Commands::Login { provider, profile } => {
             return run_for_profile(provider, &profile, provider.login_args());
         }
@@ -155,15 +153,17 @@ fn initialize(default: String) -> Result<()> {
     let config = Config::new(default.clone(), providers);
     initialize_profile(&default)?;
     config::save(&config)?;
+    let shim_directory = shims::install()?;
     ui::success("Initialized routeai");
     ui::field("Config", path.display());
     ui::field("Default", &default);
     print_commands(&config);
     ui::blank();
+    show_installed_shims(&shim_directory);
+    ui::blank();
     ui::heading("Next steps");
     ui::next_step("routeai profile add work");
     ui::next_step("routeai route add work /path/to/work");
-    ui::next_step("routeai shim install");
     Ok(())
 }
 
@@ -363,14 +363,7 @@ fn shim(command: ShimCommand) -> Result<()> {
     match command {
         ShimCommand::Install => {
             let directory = shims::install()?;
-            ui::success("Installed claude and codex shims");
-            ui::field("Directory", directory.display());
-            if shims::on_path(&directory) {
-                ui::field("Status", "ready in new shells");
-            } else {
-                ui::blank();
-                ui::path_instruction(&directory);
-            }
+            show_installed_shims(&directory);
         }
         ShimCommand::Uninstall => {
             let directory = shims::uninstall()?;
@@ -379,6 +372,17 @@ fn shim(command: ShimCommand) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn show_installed_shims(directory: &Path) {
+    ui::success("Installed claude and codex shims");
+    ui::field("Directory", directory.display());
+    if shims::on_path(directory) {
+        ui::field("Status", "ready in new shells");
+    } else {
+        ui::blank();
+        ui::path_instruction(directory);
+    }
 }
 
 fn doctor() -> Result<()> {
