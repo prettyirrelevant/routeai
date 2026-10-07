@@ -32,8 +32,8 @@ routeai route add work ~/Developer/Work/Acme
 routeai shim install
 ```
 
-Add the line printed by `routeai shim install` after other `PATH` changes in your shell
-profile. Restart your shell, then verify the setup:
+When needed, add the line printed by `routeai shim install` after other `PATH` changes.
+Restart your shell, then verify the setup:
 
 ```sh
 routeai doctor

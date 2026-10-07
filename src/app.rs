@@ -365,8 +365,12 @@ fn shim(command: ShimCommand) -> Result<()> {
             let directory = shims::install()?;
             ui::success("Installed claude and codex shims");
             ui::field("Directory", directory.display());
-            ui::blank();
-            ui::path_instruction(&directory);
+            if shims::on_path(&directory) {
+                ui::field("Status", "ready in new shells");
+            } else {
+                ui::blank();
+                ui::path_instruction(&directory);
+            }
         }
         ShimCommand::Uninstall => {
             let directory = shims::uninstall()?;
