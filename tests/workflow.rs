@@ -176,3 +176,27 @@ fn new_profiles_skip_missing_global_instructions() {
     assert!(!state.join("claude/CLAUDE.md").exists());
     assert!(!state.join("codex/AGENTS.md").exists());
 }
+
+#[test]
+fn doctor_reports_only_missing_route_directories() {
+    let home = TestHome::new();
+    home.command().args(["init"]).assert().success();
+    let present = home.root().join("present");
+    let missing = home.root().join("missing");
+    fs::create_dir_all(&present).unwrap();
+    fs::create_dir_all(&missing).unwrap();
+    for path in [&present, &missing] {
+        home.command()
+            .args(["route", "add", "personal"])
+            .arg(path)
+            .assert()
+            .success();
+    }
+    fs::remove_dir(&missing).unwrap();
+
+    let output = home.command().arg("doctor").output().unwrap();
+    let stdout = String::from_utf8(output.stdout).unwrap();
+
+    assert!(stdout.contains(&format!("{} does not exist", missing.display())));
+    assert!(!stdout.contains(&present.display().to_string()));
+}
