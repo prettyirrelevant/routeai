@@ -151,12 +151,13 @@ fn initialize(default: String) -> Result<()> {
         },
     };
     let config = Config::new(default.clone(), providers);
-    initialize_profile(&default)?;
+    let linked = initialize_profile(&default)?;
     config::save(&config)?;
     let shim_directory = shims::install(&config)?;
     ui::success("Initialized routeai");
     ui::field("Config", path.display());
     ui::field("Default", &default);
+    show_linked_instructions(&linked);
     print_commands(&config);
     ui::blank();
     show_installed_shims(&shim_directory);
@@ -175,7 +176,7 @@ fn profile(command: ProfileCommand) -> Result<()> {
             if config.profiles.contains(&name) {
                 bail!("profile '{name}' already exists");
             }
-            initialize_profile(&name)?;
+            let linked = initialize_profile(&name)?;
             config.profiles.insert(name.clone());
             config::save(&config)?;
             ui::success(format_args!("Added profile '{name}'"));
@@ -183,6 +184,7 @@ fn profile(command: ProfileCommand) -> Result<()> {
                 "State",
                 config::state_root()?.join("profiles").join(&name).display(),
             );
+            show_linked_instructions(&linked);
         }
         ProfileCommand::List => {
             ui::heading("Profiles");
@@ -373,6 +375,12 @@ fn shim(command: ShimCommand) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn show_linked_instructions(linked: &[PathBuf]) {
+    for path in linked {
+        ui::field("Linked", path.display());
+    }
 }
 
 fn show_installed_shims(directory: &Path) {
