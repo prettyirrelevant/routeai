@@ -1,6 +1,6 @@
 [package]
 name = "routeai"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Route AI coding CLIs to isolated accounts by directory"
 license = "MIT"
