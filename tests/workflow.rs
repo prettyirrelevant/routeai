@@ -200,3 +200,36 @@ fn doctor_reports_only_missing_route_directories() {
     assert!(stdout.contains(&format!("{} does not exist", missing.display())));
     assert!(!stdout.contains(&present.display().to_string()));
 }
+
+#[test]
+fn route_list_filters_by_profile() {
+    let home = TestHome::new();
+    home.command().args(["init"]).assert().success();
+    home.command()
+        .args(["profile", "add", "work"])
+        .assert()
+        .success();
+    let personal = home.root().join("personal-code");
+    let work = home.root().join("work-code");
+    fs::create_dir_all(&personal).unwrap();
+    fs::create_dir_all(&work).unwrap();
+    home.command()
+        .args(["route", "add", "personal"])
+        .arg(&personal)
+        .assert()
+        .success();
+    home.command()
+        .args(["route", "add", "work"])
+        .arg(&work)
+        .assert()
+        .success();
+
+    home.command()
+        .args(["route", "list", "--profile", "work"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("work-code")
+                .and(predicate::str::contains("personal-code").not()),
+        );
+}

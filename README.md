@@ -69,7 +69,7 @@ routeai profile list
 routeai profile remove <name>
 routeai route add <profile> <directory>
 routeai route remove <directory>
-routeai route list
+routeai route list [--profile <name>]
 routeai default <profile>
 routeai which [directory]
 routeai status [--profile <name>]
