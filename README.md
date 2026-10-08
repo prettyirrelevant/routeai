@@ -39,6 +39,9 @@ routeai doctor
 routeai which
 ```
 
+> [!NOTE]
+> New profiles link to `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md`, so every profile shares them.
+
 Sign each provider into each account:
 
 ```sh

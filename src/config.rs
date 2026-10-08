@@ -163,7 +163,14 @@ pub fn save(config: &Config) -> Result<()> {
     Ok(())
 }
 
-pub fn initialize_profile(name: &str) -> Result<()> {
+/// Global instruction files that each new profile links from the provider's default home.
+const GLOBAL_INSTRUCTIONS: [(&str, &str, &str); 2] = [
+    ("claude", ".claude", "CLAUDE.md"),
+    ("codex", ".codex", "AGENTS.md"),
+];
+
+/// Creates the profile state and returns the global instruction files it linked.
+pub fn initialize_profile(name: &str) -> Result<Vec<PathBuf>> {
     validate_profile_name(name)?;
     let root = state_root()?.join("profiles").join(name);
     fs::create_dir_all(root.join("claude"))?;
@@ -179,7 +186,34 @@ pub fn initialize_profile(name: &str) -> Result<()> {
             "# routeai keeps this profile's credentials under CODEX_HOME.\ncli_auth_credentials_store = \"file\"\n",
         )?;
     }
-    Ok(())
+    link_global_instructions(&root)
+}
+
+fn link_global_instructions(root: &Path) -> Result<Vec<PathBuf>> {
+    let home = home_dir()?;
+    let mut linked = Vec::new();
+    for (provider, directory, file) in GLOBAL_INSTRUCTIONS {
+        let source = home.join(directory).join(file);
+        let target = root.join(provider).join(file);
+        if !source.is_file() || target.symlink_metadata().is_ok() {
+            continue;
+        }
+        link_file(&source, &target)
+            .with_context(|| format!("could not link {}", source.display()))?;
+        linked.push(target);
+    }
+    Ok(linked)
+}
+
+#[cfg(unix)]
+fn link_file(source: &Path, target: &Path) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(source, target)
+}
+
+// Windows file symlinks need extra privileges, so profiles there keep a copy.
+#[cfg(windows)]
+fn link_file(source: &Path, target: &Path) -> std::io::Result<()> {
+    fs::copy(source, target).map(|_| ())
 }
 
 #[cfg(unix)]

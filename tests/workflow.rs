@@ -35,6 +35,7 @@ impl TestHome {
         command
             .env("ROUTEAI_CONFIG", self.root().join("config.toml"))
             .env("ROUTEAI_HOME", self.root().join("state"))
+            .env("HOME", self.root().join("home"))
             .env("PATH", self.root().join("bin"));
         command
     }
@@ -131,4 +132,47 @@ fn profile_override_beats_directory_route() {
         .assert()
         .success()
         .stdout(predicate::str::contains("state/profiles/work/codex"));
+}
+
+#[test]
+fn new_profiles_share_global_instructions() {
+    let home = TestHome::new();
+    let claude = home.root().join("home/.claude");
+    let codex = home.root().join("home/.codex");
+    fs::create_dir_all(&claude).unwrap();
+    fs::create_dir_all(&codex).unwrap();
+    fs::write(claude.join("CLAUDE.md"), "claude rules\n").unwrap();
+    fs::write(codex.join("AGENTS.md"), "codex rules\n").unwrap();
+
+    home.command().args(["init"]).assert().success();
+    home.command()
+        .args(["profile", "add", "work"])
+        .assert()
+        .success();
+
+    fs::write(claude.join("CLAUDE.md"), "updated claude rules\n").unwrap();
+    fs::write(codex.join("AGENTS.md"), "updated codex rules\n").unwrap();
+
+    for profile in ["personal", "work"] {
+        let state = home.root().join("state/profiles").join(profile);
+        assert_eq!(
+            fs::read_to_string(state.join("claude/CLAUDE.md")).unwrap(),
+            "updated claude rules\n"
+        );
+        assert_eq!(
+            fs::read_to_string(state.join("codex/AGENTS.md")).unwrap(),
+            "updated codex rules\n"
+        );
+    }
+}
+
+#[test]
+fn new_profiles_skip_missing_global_instructions() {
+    let home = TestHome::new();
+
+    home.command().args(["init"]).assert().success();
+
+    let state = home.root().join("state/profiles/personal");
+    assert!(!state.join("claude/CLAUDE.md").exists());
+    assert!(!state.join("codex/AGENTS.md").exists());
 }
