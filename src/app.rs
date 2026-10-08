@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeMap,
     env,
     ffi::OsString,
     path::{Path, PathBuf},
@@ -89,8 +90,11 @@ enum RouteCommand {
     Add { profile: String, path: PathBuf },
     /// Remove a directory route.
     Remove { path: PathBuf },
-    /// List directory routes.
-    List,
+    /// List directory routes grouped by profile.
+    List {
+        #[arg(long)]
+        profile: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -258,14 +262,33 @@ fn route(command: RouteCommand) -> Result<()> {
             ui::success("Removed route");
             ui::field("Directory", path.display());
         }
-        RouteCommand::List => {
-            ui::heading("Routes");
-            let mut routes = config.routes.iter().collect::<Vec<_>>();
-            routes.sort_by(|left, right| left.path.cmp(&right.path));
-            for route in routes {
-                ui::field(&route.profile, route.path.display());
+        RouteCommand::List { profile } => {
+            if let Some(profile) = &profile {
+                ensure_profile(&config, profile)?;
             }
-            ui::field("default", &config.default_profile);
+            let mut groups = BTreeMap::<&str, Vec<&Path>>::new();
+            for route in &config.routes {
+                if profile.as_ref().is_none_or(|name| name == &route.profile) {
+                    groups.entry(&route.profile).or_default().push(&route.path);
+                }
+            }
+            if groups.is_empty() {
+                ui::plain("No routes");
+            }
+            for (index, (name, mut paths)) in groups.into_iter().enumerate() {
+                if index > 0 {
+                    ui::blank();
+                }
+                paths.sort();
+                ui::heading(name);
+                for path in paths {
+                    ui::item(path.display());
+                }
+            }
+            if profile.is_none() {
+                ui::blank();
+                ui::field("Default", &config.default_profile);
+            }
         }
     }
     Ok(())

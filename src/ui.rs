@@ -45,6 +45,10 @@ pub fn field(label: &str, value: impl Display) {
     );
 }
 
+pub fn item(value: impl Display) {
+    println!("  {value}");
+}
+
 pub fn next_step(command: impl Display) {
     println!("  {}", style(command).cyan());
 }
