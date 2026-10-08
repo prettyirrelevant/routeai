@@ -398,7 +398,6 @@ fn doctor() -> Result<()> {
     let config = config::load()?;
     let mut problems = 0;
     let mut checks = 1;
-    ui::heading("routeai doctor");
     ui::check(format_args!(
         "Configuration  {}",
         config::config_path()?.display()
@@ -426,15 +425,20 @@ fn doctor() -> Result<()> {
             }
         }
     }
-    for route in &config.routes {
+    if !config.routes.is_empty() {
         checks += 1;
-        if route.path.is_dir() {
-            ui::check(format_args!(
-                "Route          {} → {}",
-                route.path.display(),
-                route.profile
-            ));
-        } else {
+        let missing = config
+            .routes
+            .iter()
+            .filter(|route| !route.path.is_dir())
+            .collect::<Vec<_>>();
+        if missing.is_empty() {
+            match config.routes.len() {
+                1 => ui::check("Routes         1 directory exists"),
+                count => ui::check(format_args!("Routes         {count} directories exist")),
+            }
+        }
+        for route in &missing {
             problems += 1;
             ui::problem(format_args!(
                 "Route          {} does not exist",
